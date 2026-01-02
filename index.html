@@ -1,0 +1,636 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>LumiCare App</title>
+
+  <!-- Tailwind + Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
+
+  <!-- Firebase SDK (load ONCE) -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+  <style>
+    :root{
+      --bg:#F9F7F2;
+      --teal:#42BEC0;
+      --blue:#5496E6;
+      --red:#E83B50;
+      --text:#0f172a;
+      --muted:#6b7280;
+      --card:#ffffff;
+      --border: rgba(15,23,42,0.08);
+    }
+
+    body{
+      margin:0;
+      background: var(--bg);
+      font-family: "Segoe UI", sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Phone frame */
+    .app-frame{
+      max-width: 480px;
+      height: 100vh;
+      margin: 0 auto;
+      background: var(--bg);
+      box-shadow: 0 0 25px rgba(0,0,0,0.10);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Screens */
+    .screen{
+      display:none;
+      flex-direction: column;
+      height: 100%;
+      overflow-y: auto;
+      padding-bottom: 95px; /* room for bottom nav */
+      animation: fadeIn 0.18s ease-in-out;
+    }
+    .screen.active{ display:flex; }
+
+    @keyframes fadeIn{
+      from{ opacity:0.85; transform: scale(0.995); }
+      to{ opacity:1; transform: scale(1); }
+    }
+
+    /* Cards like your screenshot */
+    .lc-card{
+      background: var(--card);
+      border: 1px solid var(--border);
+      box-shadow: 0 10px 25px rgba(15,23,42,0.06);
+      border-radius: 18px;
+    }
+
+    .status-pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 10px;
+      border-radius: 999px;
+      font-weight:800;
+      font-size:12px;
+      background: rgba(66,190,192,0.15);
+      color: #167c7e;
+    }
+    .status-pill.out{
+      background: rgba(232,59,80,0.12);
+      color: var(--red);
+    }
+
+    /* Alert overlay */
+    .alert-overlay{
+      position:absolute;
+      inset:0;
+      z-index: 60;
+      display:none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align:center;
+      padding: 2rem;
+      color:white;
+    }
+    .alert-overlay.show{ display:flex; }
+
+    @keyframes pulse-red{
+      0%,100%{ background-color: #E83B50; }
+      50%{ background-color: #cc2f44; }
+    }
+    .bg-pulse-red{ animation: pulse-red 2s infinite; }
+
+    /* Bottom nav */
+    .nav-btn.active{ color: var(--teal) !important; }
+    .nav-btn.active .icon-box{ background: rgba(66,190,192,0.14) !important; }
+
+    /* Dev panel */
+    .dev-panel{
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(15, 23, 42, 0.9);
+      padding: 15px;
+      border-radius: 12px;
+      z-index: 200;
+      color: white;
+      font-size: 12px;
+      backdrop-filter: blur(5px);
+      transform: translateY(150%);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      width: 280px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .dev-panel.open{ transform: translateY(0); }
+
+    .dev-toggle{
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 48px;
+      height: 48px;
+      background: var(--blue);
+      border-radius: 50%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:white;
+      z-index: 201;
+      cursor:pointer;
+      box-shadow: 0 4px 15px rgba(84,150,230,0.4);
+      transition: transform 0.2s;
+    }
+    .dev-toggle:hover{ transform: scale(1.08); }
+  </style>
+</head>
+
+<body>
+  <div class="app-frame">
+
+    <!-- ==================== SCREEN: HOME ==================== -->
+    <div id="home" class="screen active">
+      <!-- Top Bar -->
+      <div class="p-5 flex justify-between items-center sticky top-0 z-30" style="background: var(--bg);">
+        <div class="flex items-center gap-3">
+          <!-- Logo placeholder (replace with your SVG later) -->
+          <div class="w-11 h-11 rounded-xl flex items-center justify-center"
+               style="background: rgba(66,190,192,0.15); color: var(--teal);">
+            <i class="fas fa-eye text-xl"></i>
+          </div>
+          <div class="font-extrabold text-xl" style="color: var(--text);">LumiCare</div>
+        </div>
+
+        <button class="w-11 h-11 rounded-full flex items-center justify-center"
+                style="background: rgba(84,150,230,0.10); color: var(--blue); border:1px solid var(--border);">
+          <i class="fas fa-bell"></i>
+        </button>
+      </div>
+
+      <div class="px-6 pb-6">
+        <!-- Profile + Status -->
+        <div class="flex flex-col items-center text-center mt-2 mb-6">
+          <div class="w-24 h-24 rounded-full overflow-hidden flex items-center justify-center"
+               style="background:#fff; border: 1px solid var(--border); box-shadow: 0 10px 25px rgba(15,23,42,0.06);">
+            <i class="fas fa-user text-4xl" style="color:#cbd5e1;"></i>
+          </div>
+
+          <div class="mt-4 text-2xl font-extrabold" style="color: var(--text);">Mr. Chen</div>
+
+          <div class="mt-2 status-pill" id="status-pill-wrap">
+            <i class="fas fa-check-circle"></i>
+            <span id="status-pill">Safe / In Bed</span>
+          </div>
+
+          <div class="mt-3 text-sm" style="color: var(--muted);">
+            Last Active <span id="last-active" class="font-bold" style="color: var(--text);">07:15 AM</span>
+          </div>
+        </div>
+
+        <!-- Night Summary -->
+        <div class="lc-card p-5 mb-4">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2 font-extrabold" style="color: var(--text);">
+                <div class="w-9 h-9 rounded-xl flex items-center justify-center"
+                     style="background: rgba(84,150,230,0.12); color: var(--blue);">
+                  <i class="fas fa-moon"></i>
+                </div>
+                <span>Night Summary</span>
+              </div>
+
+              <div class="mt-4 flex items-end gap-2">
+                <div class="text-5xl font-extrabold" style="color: var(--blue);" id="night-exits">3</div>
+                <div class="pb-2 font-bold" style="color: var(--blue);">Exits</div>
+              </div>
+
+              <div class="mt-1 text-sm" style="color: var(--muted);">
+                Average Time out of bed: <span class="font-bold" style="color: var(--text);" id="avg-out-min">12</span> min.
+              </div>
+            </div>
+
+            <!-- Static bar chart (demo UI) -->
+            <div class="w-40">
+              <div class="h-24 flex items-end gap-2">
+                <div class="w-5 rounded-lg" style="height: 35%; background: rgba(84,150,230,0.25);"></div>
+                <div class="w-5 rounded-lg" style="height: 70%; background: rgba(66,190,192,0.35);"></div>
+                <div class="w-5 rounded-lg" style="height: 55%; background: rgba(84,150,230,0.25);"></div>
+                <div class="w-5 rounded-lg" style="height: 30%; background: rgba(84,150,230,0.25);"></div>
+                <div class="w-5 rounded-lg" style="height: 60%; background: rgba(66,190,192,0.35);"></div>
+              </div>
+              <div class="mt-2 flex justify-between text-[10px]" style="color: var(--muted);">
+                <span>2 AM</span><span>4 AM</span><span>6 AM</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Health Trends -->
+        <div class="lc-card p-5">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex items-start gap-3">
+              <div class="w-10 h-10 rounded-xl flex items-center justify-center"
+                   style="background: rgba(232,59,80,0.12); color: var(--red);">
+                <i class="fas fa-arrow-trend-down"></i>
+              </div>
+              <div>
+                <div class="font-extrabold" style="color: var(--text);">Health Trends</div>
+                <div class="text-sm mt-1" style="color: var(--text);">
+                  <span class="font-bold" style="color: var(--red);">Gait Speed Alert:</span>
+                  Walking speed has decreased by 10% this week.
+                </div>
+              </div>
+            </div>
+
+            <button class="text-sm font-bold whitespace-nowrap"
+                    style="color: var(--teal);"
+                    onclick="switchTab('history')">
+              View Details &gt;
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SCREEN: HISTORY ==================== -->
+    <div id="history" class="screen">
+      <div class="p-5 sticky top-0 z-30" style="background: var(--bg);">
+        <div class="font-extrabold text-xl" style="color: var(--text);">History & Trends</div>
+      </div>
+
+      <div class="px-6 pb-6">
+        <!-- Sleep Chart -->
+        <div class="lc-card p-5 mb-5">
+          <h3 class="font-extrabold mb-4 text-sm" style="color: var(--text);">Sleep Duration (Hours)</h3>
+
+          <div class="flex justify-between items-end h-32 gap-2 px-1">
+            <div class="flex flex-col items-center gap-1 w-full">
+              <div class="w-full rounded-t h-[60%]" style="background: rgba(84,150,230,0.18);"></div>
+              <span class="text-[10px]" style="color: var(--muted);">M</span>
+            </div>
+            <div class="flex flex-col items-center gap-1 w-full">
+              <div class="w-full rounded-t h-[70%]" style="background: rgba(84,150,230,0.18);"></div>
+              <span class="text-[10px]" style="color: var(--muted);">T</span>
+            </div>
+            <div class="flex flex-col items-center gap-1 w-full">
+              <div class="w-full rounded-t h-[50%]" style="background: rgba(84,150,230,0.18);"></div>
+              <span class="text-[10px]" style="color: var(--muted);">W</span>
+            </div>
+            <div class="flex flex-col items-center gap-1 w-full">
+              <div class="w-full rounded-t h-[80%] relative" style="background: rgba(84,150,230,0.85);">
+                <div class="absolute -top-6 left-1/2 -translate-x-1/2 text-white text-[10px] px-1 rounded"
+                     style="background: rgba(15,23,42,0.85);">7h</div>
+              </div>
+              <span class="text-[10px] font-bold" style="color: var(--text);">T</span>
+            </div>
+            <div class="flex flex-col items-center gap-1 w-full">
+              <div class="w-full rounded-t h-[65%]" style="background: rgba(84,150,230,0.18);"></div>
+              <span class="text-[10px]" style="color: var(--muted);">F</span>
+            </div>
+            <div class="flex flex-col items-center gap-1 w-full">
+              <div class="w-full rounded-t h-[75%]" style="background: rgba(84,150,230,0.18);"></div>
+              <span class="text-[10px]" style="color: var(--muted);">S</span>
+            </div>
+            <div class="flex flex-col items-center gap-1 w-full">
+              <div class="w-full rounded-t h-[60%]" style="background: rgba(84,150,230,0.18);"></div>
+              <span class="text-[10px]" style="color: var(--muted);">S</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Gait Chart -->
+        <div class="lc-card p-5 mb-5">
+          <h3 class="font-extrabold mb-1 text-sm" style="color: var(--text);">Gait Speed Activity</h3>
+          <p class="text-xs mb-4" style="color: var(--muted);">Meters per second (m/s)</p>
+
+          <div class="h-32 w-full relative">
+            <div class="absolute top-0 w-full h-px" style="background: rgba(15,23,42,0.06);"></div>
+            <div class="absolute top-1/2 w-full h-px" style="background: rgba(15,23,42,0.06);"></div>
+            <div class="absolute bottom-0 w-full h-px" style="background: rgba(15,23,42,0.06);"></div>
+
+            <svg viewBox="0 0 100 40" class="w-full h-full" preserveAspectRatio="none">
+              <path d="M0,30 Q10,25 20,30 T40,25 T60,35 T80,20 T100,25"
+                    fill="none" stroke="#42BEC0" stroke-width="2" />
+              <path d="M0,30 Q10,25 20,30 T40,25 T60,35 T80,20 T100,25 V40 H0 Z"
+                    fill="rgba(66, 190, 192, 0.12)" stroke="none" />
+              <circle cx="80" cy="20" r="2" fill="#E83B50" />
+            </svg>
+          </div>
+        </div>
+
+        <!-- Daily Alerts -->
+        <div class="lc-card p-4 flex items-center gap-4">
+          <div class="w-12 h-12 rounded-full flex items-center justify-center text-xl"
+               style="background: rgba(232,59,80,0.12); color: var(--red);">
+            <i class="fas fa-exclamation"></i>
+          </div>
+          <div>
+            <div class="text-xs font-extrabold uppercase" style="color: var(--muted);">Daily Alerts</div>
+            <div class="text-sm" style="color: var(--text);">
+              User received <span id="daily-alerts-count" class="font-extrabold">0</span> alerts today
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SCREEN: SETTINGS ==================== -->
+    <div id="settings" class="screen">
+      <div class="p-5 sticky top-0 z-30" style="background: var(--bg);">
+        <div class="font-extrabold text-xl" style="color: var(--text);">Settings</div>
+      </div>
+
+      <div class="px-6 pb-6">
+        <div class="mb-6">
+          <div class="text-xs font-extrabold uppercase mb-3" style="color: var(--muted);">Safety Thresholds</div>
+          <div class="lc-card p-5">
+            <div class="flex justify-between items-center mb-4">
+              <span class="font-extrabold" style="color: var(--text);">Wandering Trigger</span>
+              <span id="threshold-label" class="text-xs font-extrabold px-2 py-1 rounded"
+                    style="background: rgba(84,150,230,0.12); color: var(--blue);">15 min</span>
+            </div>
+            <p class="text-xs mb-4" style="color: var(--muted);">Trigger alarm if out of bed longer than:</p>
+
+            <input id="threshold-slider" type="range" min="1" max="60" value="15"
+                   class="w-full h-2 rounded-lg appearance-none cursor-pointer"
+                   style="accent-color: var(--blue); background: rgba(15,23,42,0.10);">
+
+            <div class="flex justify-between text-[10px] mt-2" style="color: var(--muted);">
+              <span>1m</span><span>30m</span><span>60m</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="mb-6">
+          <div class="text-xs font-extrabold uppercase mb-3" style="color: var(--muted);">Automation</div>
+
+          <div class="lc-card p-4 flex justify-between items-center mb-3">
+            <div>
+              <div class="font-extrabold" style="color: var(--text);">Auto Guide Lights</div>
+              <div class="text-xs mt-1" style="color: var(--muted);">Turn on LEDs when feet touch mat</div>
+            </div>
+            <input type="checkbox" class="w-6 h-6" checked style="accent-color: var(--teal);" />
+          </div>
+
+          <div class="lc-card p-4 flex justify-between items-center">
+            <div>
+              <div class="font-extrabold" style="color: var(--red);">Critical Alerts</div>
+              <div class="text-xs mt-1" style="color: var(--muted);">Break through Silent Mode</div>
+            </div>
+            <input type="checkbox" class="w-6 h-6" checked style="accent-color: var(--red);" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== ALERT OVERLAY ==================== -->
+    <div id="alert-overlay" class="alert-overlay bg-pulse-red">
+      <div class="w-28 h-28 rounded-full flex items-center justify-center mb-8"
+           style="background: rgba(255,255,255,0.20);">
+        <i class="fas fa-exclamation-triangle text-5xl"></i>
+      </div>
+
+      <div class="text-3xl font-extrabold mb-2">CRITICAL ALERT</div>
+      <div id="alert-subtitle" class="text-white/90 text-lg mb-3">Wandering Detected</div>
+
+      <div id="alert-message" class="text-white/90 text-base mb-8 max-w-xs">
+        Monitoring...
+      </div>
+
+      <div class="flex flex-col gap-4 w-full max-w-xs">
+        <button class="bg-white text-red-600 py-4 rounded-full font-extrabold shadow-xl active:scale-95 transition flex items-center justify-center gap-2">
+          <i class="fas fa-phone-alt"></i> Call Mr. Chen
+        </button>
+        <button onclick="resolveAlert()" class="bg-transparent border-2 border-white/60 text-white py-4 rounded-full font-extrabold active:bg-white/10 transition">
+          I'm Handling It
+        </button>
+      </div>
+    </div>
+
+    <!-- ==================== BOTTOM NAV ==================== -->
+    <div class="bg-white border-t border-slate-200 p-2 pb-5 flex justify-around items-center fixed bottom-0 left-1/2 -translate-x-1/2 w-full z-50 h-[85px] max-w-[480px]">
+      <button onclick="switchTab('home')" id="btn-home" class="nav-btn w-full flex flex-col items-center active">
+        <div class="icon-box w-12 h-8 rounded-full flex items-center justify-center mb-1 transition-colors"
+             style="background: rgba(66,190,192,0.14); color: var(--teal);">
+          <i class="fas fa-home text-xl"></i>
+        </div>
+        <span class="text-[10px] font-extrabold" style="color: var(--teal);">Home</span>
+      </button>
+
+      <button onclick="switchTab('history')" id="btn-history" class="nav-btn w-full flex flex-col items-center text-slate-400">
+        <div class="icon-box w-12 h-8 rounded-full flex items-center justify-center mb-1 transition-colors">
+          <i class="fas fa-chart-line text-xl"></i>
+        </div>
+        <span class="text-[10px] font-extrabold">History</span>
+      </button>
+
+      <button onclick="switchTab('settings')" id="btn-settings" class="nav-btn w-full flex flex-col items-center text-slate-400">
+        <div class="icon-box w-12 h-8 rounded-full flex items-center justify-center mb-1 transition-colors">
+          <i class="fas fa-cog text-xl"></i>
+        </div>
+        <span class="text-[10px] font-extrabold">Settings</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== DEV PANEL (optional) ==================== -->
+  <div class="dev-toggle" onclick="toggleDevPanel()"><i class="fas fa-code"></i></div>
+  <div class="dev-panel" id="dev-panel">
+    <div class="flex justify-between items-center mb-4 border-b border-white/20 pb-2">
+      <span class="font-bold text-blue-400">Hardware Simulator</span>
+      <button onclick="toggleDevPanel()" class="text-slate-300 hover:text-white"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <button onclick="simMatPress()" class="bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-lg text-left transition text-xs font-bold">
+        <i class="fas fa-shoe-prints mr-2"></i>Step On Mat
+      </button>
+      <button onclick="simMatRelease()" class="bg-slate-700 hover:bg-slate-600 text-white p-3 rounded-lg text-left transition text-xs font-bold">
+        <i class="fas fa-bed mr-2"></i>Return to Bed
+      </button>
+      <button onclick="simTimeout()" class="bg-red-600 hover:bg-red-500 text-white p-3 rounded-lg text-center col-span-2 transition text-xs font-bold">
+        <i class="fas fa-clock mr-2"></i>Force Timeout
+      </button>
+    </div>
+    <p class="text-slate-300 text-[10px] mt-3 text-center">Use this to control the app without physical hardware.</p>
+  </div>
+
+  <script>
+    // ================= Firebase init =================
+    const firebaseConfig = {
+      apiKey: "AIzaSyCvsQt5n0W85v0Ys-h7lB0wdgKxtKTS-vI",
+      authDomain: "smart-mat-dbc27.firebaseapp.com",
+      databaseURL: "https://smart-mat-dbc27-default-rtdb.firebaseio.com",
+      projectId: "smart-mat-dbc27",
+      storageBucket: "smart-mat-dbc27.firebasestorage.app",
+      messagingSenderId: "731117343382",
+      appId: "1:731117343382:web:f2b520da55d37e08a2e8b7"
+    };
+
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const matRef = db.ref("lumicare/mat_status");
+    const alertsRef = db.ref("lumicare/alerts");
+
+    // ================= DOM =================
+    const statusPillEl = document.getElementById("status-pill");
+    const statusPillWrap = document.getElementById("status-pill-wrap");
+    const lastActiveEl = document.getElementById("last-active");
+
+    const alertOverlay = document.getElementById("alert-overlay");
+    const alertSubtitle = document.getElementById("alert-subtitle");
+    const alertMessage = document.getElementById("alert-message");
+
+    const dailyAlertsEl = document.getElementById("daily-alerts-count");
+    const thresholdSlider = document.getElementById("threshold-slider");
+    const thresholdLabel = document.getElementById("threshold-label");
+
+    // ================= State =================
+    let thresholdMinutes = parseInt(thresholdSlider.value, 10) || 15;
+    let currentStatus = { active: false, outOfBedSince: null };
+    let checkTimer = null;
+    let alertAlreadyTriggered = false;
+
+    // ================= Helpers =================
+    function fmtTime(ts){
+      const d = new Date(ts);
+      let h = d.getHours();
+      const m = String(d.getMinutes()).padStart(2,"0");
+      const ampm = h >= 12 ? "PM" : "AM";
+      h = h % 12; if (h === 0) h = 12;
+      return `${h}:${m} ${ampm}`;
+    }
+
+    function showCriticalAlert(msg){
+      alertSubtitle.textContent = `Wandering Detected (>${thresholdMinutes}m)`;
+      alertMessage.textContent = msg;
+      alertOverlay.classList.add("show");
+    }
+
+    function hideCriticalAlert(){
+      alertOverlay.classList.remove("show");
+    }
+
+    function todayStartMs(){
+      const d = new Date();
+      d.setHours(0,0,0,0);
+      return d.getTime();
+    }
+
+    async function refreshDailyAlertsCount(){
+      const snap = await alertsRef.orderByChild("ts").startAt(todayStartMs()).once("value");
+      let count = 0;
+      snap.forEach(() => count++);
+      dailyAlertsEl.textContent = count;
+    }
+
+    async function createAlertEvent(payload){
+      const lastKey = sessionStorage.getItem("last_alert_key");
+      if (lastKey === payload.dedupeKey) return;
+      await alertsRef.push(payload);
+      sessionStorage.setItem("last_alert_key", payload.dedupeKey);
+    }
+
+    function startChecking(){
+      if (checkTimer) clearInterval(checkTimer);
+      checkTimer = setInterval(async () => {
+        if (!currentStatus.active) return;
+        if (!currentStatus.outOfBedSince) return;
+
+        const elapsedMin = (Date.now() - currentStatus.outOfBedSince) / 60000;
+
+        if (elapsedMin >= thresholdMinutes && !alertAlreadyTriggered){
+          alertAlreadyTriggered = true;
+
+          const msg = `Mr. Chen has been out of bed for ${thresholdMinutes} minutes. No return pressure detected.`;
+          showCriticalAlert(msg);
+
+          const dedupeKey = `${Math.floor(currentStatus.outOfBedSince/1000)}_${thresholdMinutes}`;
+          await createAlertEvent({
+            ts: Date.now(),
+            type: "wandering",
+            thresholdMinutes,
+            outOfBedSince: currentStatus.outOfBedSince,
+            message: msg,
+            dedupeKey
+          });
+
+          await refreshDailyAlertsCount();
+        }
+      }, 1000);
+    }
+
+    // ================= Navigation =================
+    window.switchTab = function(tabId){
+      document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+      const target = document.getElementById(tabId);
+      if (target) target.classList.add("active");
+
+      document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+      const btn = document.getElementById("btn-" + tabId);
+      if (btn) btn.classList.add("active");
+    };
+
+    // ================= Alert resolve =================
+    window.resolveAlert = async function(){
+      hideCriticalAlert();
+      alertAlreadyTriggered = false;
+      await refreshDailyAlertsCount();
+    };
+
+    // ================= Settings slider =================
+    thresholdSlider.addEventListener("input", () => {
+      thresholdMinutes = parseInt(thresholdSlider.value, 10);
+      thresholdLabel.textContent = `${thresholdMinutes} min`;
+    });
+
+    // ================= Listen to mat status =================
+    matRef.on("value", async (snap) => {
+      const data = snap.val() || {};
+      const active = !!data.active;
+
+      currentStatus.active = active;
+      currentStatus.outOfBedSince = data.outOfBedSince || (active ? Date.now() : null);
+
+      if (active){
+        statusPillEl.textContent = "Active / Out of Bed";
+        statusPillWrap.classList.add("out");
+        lastActiveEl.textContent = fmtTime(Date.now());
+        startChecking();
+      } else {
+        statusPillEl.textContent = "Safe / In Bed";
+        statusPillWrap.classList.remove("out");
+        alertAlreadyTriggered = false;
+        hideCriticalAlert();
+        await refreshDailyAlertsCount();
+      }
+    });
+
+    // ================= Dev panel (optional) =================
+    window.simMatPress = function(){
+      db.ref("lumicare/mat_status").update({ active: true, outOfBedSince: Date.now() });
+    };
+    window.simMatRelease = function(){
+      db.ref("lumicare/mat_status").update({ active: false, outOfBedSince: null });
+    };
+    window.simTimeout = function(){
+      showCriticalAlert(`Mr. Chen has been out of bed for ${thresholdMinutes} minutes. No return pressure detected.`);
+    };
+    window.toggleDevPanel = function(){
+      document.getElementById("dev-panel").classList.toggle("open");
+    };
+
+    // init
+    thresholdLabel.textContent = `${thresholdMinutes} min`;
+    refreshDailyAlertsCount();
+  </script>
+</body>
+</html>
+
